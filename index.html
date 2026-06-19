@@ -1,0 +1,1034 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Atria Analytics</title>
+<meta name="description" content="Facebook / Meta ad analytics dashboard">
+<!-- PWA / installable app -->
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#f0682a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Atria">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<!-- Chart.js bundled locally so the app works offline / under the service worker -->
+<script src="chart.umd.js"></script>
+<style>
+:root{
+  color-scheme: light;
+  --bg:#f5f6f8; --card:#ffffff; --ink:#1c2024; --muted:#6b7280; --line:#e7e9ee;
+  --accent:#f0682a; --accent-soft:#fdeee6;
+  --green:#1a9d63; --green-bg:#e7f6ee; --amber:#c9870a; --amber-bg:#fdf3e0; --red:#d6452f; --red-bg:#fdecea;
+  --blue:#3563d6; --purple:#7c6cf0;
+  --shadow:0 1px 2px rgba(16,24,40,.04),0 1px 3px rgba(16,24,40,.06);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-size:13px;line-height:1.45}
+a{color:var(--blue);text-decoration:none}
+h1,h2,h3{margin:0;font-weight:650}
+.wrap{max-width:1180px;margin:0 auto;padding:16px 18px 70px}
+.topbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+.brand{display:flex;align-items:center;gap:9px;font-weight:700;font-size:15px}
+.brand .dot{width:22px;height:22px;border-radius:6px;background:var(--accent);display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px}
+.acct{font-size:12px;color:var(--muted);background:#fff;border:1px solid var(--line);border-radius:8px;padding:6px 10px}
+.spacer{flex:1}
+.ctrl{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+select,.btn{font-family:inherit;font-size:12px;border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:8px;padding:6px 10px;cursor:pointer}
+.btn:hover{background:#fafafa}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover{filter:brightness(.96)}
+.btn.ghost{background:transparent}
+#campSel{font-weight:600;color:var(--ink);border-color:#d9dce3}
+.dateinput{font-family:inherit;font-size:12px;border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:8px;padding:5px 8px}
+#customRange{gap:6px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fff}
+.seg button{border:0;background:#fff;padding:6px 10px;font-size:12px;cursor:pointer;color:var(--muted)}
+.seg button.active{background:var(--accent-soft);color:var(--accent);font-weight:600}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow)}
+.section{margin-top:18px}
+.section-head{display:flex;align-items:center;gap:10px;margin:0 2px 11px}
+.section-head h2{font-size:14px}
+.section-head .sub{font-size:11.5px;color:var(--muted)}
+.section-head .right{margin-left:auto;display:flex;gap:8px;align-items:center}
+.grid-metrics{display:grid;grid-template-columns:repeat(auto-fill,minmax(156px,1fr));gap:10px}
+.tile{padding:11px 12px 9px;border-radius:12px;background:#fff;border:1px solid var(--line);display:flex;flex-direction:column;min-height:108px;position:relative}
+.tile:not(.tile-add):not(.editing):hover{box-shadow:0 4px 12px rgba(16,24,40,.08)}
+.grid-metrics.editing .tile{border-style:dashed;cursor:grab}
+.grid-metrics.editing .tile:active{cursor:grabbing}
+.tile.dragging{opacity:.45}
+.tile.over{outline:2px dashed var(--accent);outline-offset:2px}
+.tile-x{position:absolute;top:5px;right:6px;width:18px;height:18px;border:1px solid var(--line);background:#fff;color:var(--red);border-radius:50%;line-height:1;font-size:13px;cursor:pointer;padding:0;z-index:3;display:flex;align-items:center;justify-content:center}
+.tile-x:hover{background:var(--red-bg)}
+.drag-h{margin-left:auto;color:var(--muted);font-size:13px}
+.tile-add{border-style:dashed;background:#fafbfc;justify-content:flex-start}
+.tile-add select{margin-top:6px;width:100%}
+.km-hint{font-size:11.5px;margin:9px 2px 0}
+.tile .lab{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:5px;min-height:14px}
+.tile .val{font-size:21px;font-weight:700;margin-top:4px;letter-spacing:-.02em;line-height:1.1}
+.tile .delta{font-size:11px;font-weight:600;margin-top:2px;display:inline-flex;align-items:center;gap:3px;min-height:15px}
+.tile .sparkwrap{margin-top:auto;height:30px;position:relative}
+.tile .sparkwrap canvas{position:absolute;inset:0;width:100%!important;height:100%!important}
+.up{color:var(--green)} .down{color:var(--red)} .flat{color:var(--muted)}
+.dot-status{width:7px;height:7px;border-radius:50%;display:inline-block}
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px}
+.pill.g{background:var(--green-bg);color:var(--green)} .pill.a{background:var(--amber-bg);color:var(--amber)} .pill.r{background:var(--red-bg);color:var(--red)} .pill.n{background:#eef0f4;color:var(--muted)} .pill.b{background:#e9eefb;color:var(--blue)}
+/* rolling box */
+.rollwrap{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:0;padding:4px}
+.rollcell{padding:11px 14px;border-right:1px solid var(--line)}
+.rollcell:last-child{border-right:0}
+.rollcell .k{font-size:11px;color:var(--muted)}
+.rollcell .v{font-size:19px;font-weight:700;margin-top:3px}
+.rollcell .sec{font-size:11px;color:var(--muted);margin-top:1px}
+.chartwrap{position:relative;width:100%}
+.chart-box{padding:12px}
+.bk-wrap{padding:12px;display:grid;grid-template-columns:1.15fr .85fr;gap:14px;align-items:start}
+.bk-table{font-size:12px;border-collapse:collapse;width:100%}
+.bk-table th,.bk-table td{text-align:right;padding:5px 7px;border-bottom:1px solid var(--line)}
+.bk-table th:first-child,.bk-table td:first-child{text-align:left}
+.bk-table th{color:var(--muted);font-weight:600}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(228px,1fr));gap:12px}
+.adcard{background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden;cursor:pointer;transition:box-shadow .12s,transform .12s;display:flex;flex-direction:column}
+.adcard:hover{box-shadow:0 6px 18px rgba(16,24,40,.10);transform:translateY(-1px)}
+.adcard .thumb{height:96px;position:relative;display:flex;align-items:center;justify-content:center}
+.adcard .thumb .play{width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.88);display:flex;align-items:center;justify-content:center;color:#222;font-size:13px}
+.adcard .thumb .cnt{position:absolute;top:7px;right:7px;background:rgba(0,0,0,.6);color:#fff;font-size:10.5px;padding:2px 7px;border-radius:999px}
+.adcard .thumb .rk{position:absolute;top:7px;left:7px;background:rgba(255,255,255,.92);color:#222;font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:6px}
+.adcard .body{padding:9px 10px 10px}
+.adcard .nm{font-weight:650;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chips{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:7px}
+.chip{background:#f7f8fa;border:1px solid var(--line);border-radius:7px;padding:4px 6px}
+.chip .k{font-size:9.5px;color:var(--muted)}
+.chip .v{font-size:12.5px;font-weight:650}
+.chip.g{background:var(--green-bg);border-color:#cdeedd} .chip.a{background:var(--amber-bg);border-color:#f3e3bf} .chip.r{background:var(--red-bg);border-color:#f4d3cc}
+.cardfoot{display:flex;gap:6px;padding:0 10px 10px}
+.cardfoot .mini{flex:1;text-align:center;font-size:11px;border:1px solid var(--line);border-radius:7px;padding:4px;background:#fff}
+.cardfoot .mini:hover{background:#fafafa}
+.cmp-check{position:absolute;left:7px;bottom:7px;display:flex;align-items:center;gap:4px;background:rgba(255,255,255,.92);border-radius:6px;padding:2px 6px;font-size:10.5px;color:#222}
+/* modal */
+.overlay{position:fixed;inset:0;background:rgba(15,20,30,.45);display:none;align-items:flex-start;justify-content:center;z-index:50;padding:24px;overflow:auto}
+.overlay.show{display:flex}
+.modal{background:#fff;border-radius:14px;width:min(960px,100%);box-shadow:0 20px 60px rgba(0,0,0,.3);overflow:hidden}
+.modal-head{display:flex;align-items:center;gap:10px;padding:13px 16px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.modal-head h3{font-size:15px}
+.modal-head .x{margin-left:auto;cursor:pointer;color:var(--muted);font-size:22px;line-height:1;border:0;background:none}
+.tabs{display:flex;gap:4px;padding:10px 16px 0;border-bottom:1px solid var(--line)}
+.tabs button{border:0;background:none;padding:7px 12px;font-size:12.5px;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
+.tabs button.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:650}
+.modal-body{padding:14px 16px 18px;max-height:72vh;overflow:auto}
+.mgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:9px}
+.mcell{border:1px solid var(--line);border-radius:9px;padding:8px 10px;background:#fff}
+.mcell .k{font-size:10.5px;color:var(--muted)}
+.mcell .v{font-size:15px;font-weight:680;margin-top:2px}
+.grouphdr{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:700;margin:15px 2px 8px}
+.subads{font-size:12px;margin-top:6px}
+.subads .row{display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;margin-bottom:6px;flex-wrap:wrap}
+.subads .row .nm{flex:1;font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--muted)}
+.settings-row{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--line)}
+.settings-row label{flex:1}
+.settings-row input[type=number]{width:90px;padding:5px 8px;border:1px solid var(--line);border-radius:7px;font-family:inherit;font-size:12px}
+.checks{display:grid;grid-template-columns:repeat(auto-fill,minmax(135px,1fr));gap:6px;margin-top:8px}
+.checks label{display:flex;align-items:center;gap:6px;font-size:12px;border:1px solid var(--line);border-radius:7px;padding:5px 8px;cursor:pointer}
+.muted{color:var(--muted)}
+.loading{padding:60px 20px;text-align:center;color:var(--muted)}
+.spinner{width:26px;height:26px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 12px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.err{margin:14px 0;padding:12px 14px;border:1px solid #f4d3cc;background:var(--red-bg);color:#902a1a;border-radius:10px;font-size:12.5px}
+.legend{font-size:11px;color:var(--muted);display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+.legend .sw{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px;vertical-align:middle}
+.cmpbar{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--line);box-shadow:0 -4px 14px rgba(0,0,0,.06);padding:9px 16px;display:none;align-items:center;gap:10px;z-index:40}
+.cmpbar.show{display:flex}
+.cmpbar .names{flex:1;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media(max-width:780px){.bk-wrap{grid-template-columns:1fr}}
+
+/* ===== Freshness badge ===== */
+.acct.upd{display:inline-flex;align-items:center;gap:6px}
+.acct.upd::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--green);display:inline-block;flex:none}
+.acct.upd.stale::before{background:var(--amber)}
+.acct.upd.old::before{background:var(--red)}
+
+/* ===== Touch feedback (hover states are invisible on touch) ===== */
+.btn:active,.seg button:active,.cardfoot .mini:active{background:#eef0f4}
+.btn.primary:active{filter:brightness(.92)}
+.adcard:active{box-shadow:0 6px 18px rgba(16,24,40,.10);transform:translateY(-1px)}
+.tile:not(.tile-add):active{box-shadow:0 4px 12px rgba(16,24,40,.10)}
+.btn:focus-visible,select:focus-visible,input:focus-visible,.seg button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* ===== Phone layout (<=600px) ===== */
+@media(max-width:600px){
+  body{font-size:14px}
+  .wrap{max-width:100%;padding:12px max(12px,env(safe-area-inset-right)) calc(80px + env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left))}
+  .topbar{gap:8px;margin-bottom:14px}
+  .topbar .acct{font-size:11.5px;padding:5px 8px}
+  .spacer{display:none}
+  #campSel{order:5;flex:1 1 100%;min-width:0;min-height:44px}
+  .ctrl{width:100%;gap:8px}
+  .ctrl #rangeSel{flex:1 1 auto;min-width:0}
+  select,.btn{padding:9px 12px;font-size:13px;min-height:44px}
+  .section{margin-top:16px}
+  .section-head{flex-wrap:wrap}
+  .section-head .right{margin-left:0;width:100%;flex-wrap:wrap}
+  .section-head .right select{flex:1 1 auto;min-width:0}
+  /* grids */
+  .grid-metrics{grid-template-columns:repeat(auto-fill,minmax(108px,1fr));gap:8px}
+  .tile{min-height:100px}
+  .tile .val{font-size:19px}
+  .rollwrap{grid-template-columns:1fr 1fr;padding:0}
+  .rollcell{border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
+  .rollcell:nth-child(2n){border-right:0}
+  .cards{grid-template-columns:1fr 1fr;gap:10px}
+  .mgrid{grid-template-columns:1fr 1fr}
+  .checks{grid-template-columns:1fr 1fr}
+  /* breakdown stacks; table scrolls horizontally */
+  .bk-wrap{grid-template-columns:1fr;gap:10px}
+  #bkTableWrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .bk-table{font-size:11.5px;min-width:340px}
+  /* charts sized for a phone screen (overrides inline heights) */
+  .chartwrap{height:230px!important}
+  /* modal goes full-screen */
+  .overlay{padding:0;align-items:stretch}
+  .modal{width:100%;border-radius:0;min-height:100vh}
+  .modal-head{position:sticky;top:0;background:#fff;z-index:2}
+  .modal-body{max-height:none}
+  .tabs{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .tabs button{white-space:nowrap;flex:none}
+  /* fixed compare bar clears the home-indicator */
+  .cmpbar{padding-bottom:calc(9px + env(safe-area-inset-bottom))}
+}
+/* ===== Very narrow phones (<=380px) ===== */
+@media(max-width:380px){
+  .grid-metrics{grid-template-columns:1fr 1fr}
+  .cards{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div class="brand"><span class="dot">∞</span> Atria Analytics</div>
+    <span class="acct" id="acctName">OT_gettallboy-CC</span>
+    <span class="acct upd" id="updBadge" title="When this data was last refreshed">Loading…</span>
+    <select id="campSel" title="Filter by campaign"><option value="all">All campaigns</option></select>
+    <div class="spacer"></div>
+    <div class="ctrl">
+      <select id="rangeSel" title="Date range">
+        <option value="today">Today</option>
+        <option value="yesterday">Yesterday</option>
+        <option value="last_7d">Last 7 days</option>
+        <option value="last_14d" selected>Last 14 days</option>
+        <option value="last_30d">Last 30 days</option>
+        <option value="last_90d">Last 90 days</option>
+        <option value="this_month">This month</option>
+        <option value="last_month">Last month</option>
+        <option value="maximum">Maximum</option>
+      </select>
+      <button class="btn" id="cmpToggle" title="Compare to previous period">Δ vs prev: on</button>
+      <button class="btn" id="settingsBtn">⚙ Settings</button>
+    </div>
+  </div>
+  <div id="app"><div class="loading"><div class="spinner"></div>Loading live data from your Facebook ad account…</div></div>
+</div>
+
+<div class="overlay" id="overlay"><div class="modal" id="modal"></div></div>
+
+<div class="cmpbar" id="cmpbar">
+  <strong style="font-size:12px">Compare</strong>
+  <span class="names" id="cmpNames"></span>
+  <button class="btn" id="cmpOpen">Open comparison</button>
+  <button class="btn ghost" id="cmpClear">Clear</button>
+</div>
+
+<script>
+"use strict";
+/* ============================ CONFIG ============================ */
+const ACCT_ID="1675016859991849";
+const ACCT_NAME="OT_gettallboy-CC";
+const TOOL="mcp__ea0e2fa9-b8ef-4daf-a827-49ed508e3976__ads_get_ad_entities";
+const FB_ADS_URL=id=>`https://www.facebook.com/adsmanager/manage/ads?act=${ACCT_ID}&selected_ad_ids=${id}`;
+
+const AD_FIELDS=["id","name","campaign_id","amount_spent","impressions","reach","frequency","cpm","cpc","ctr","clicks",
+  "purchase_roas","actions:omni_purchase","actions:link_click",
+  "video_p25_watched_actions","video_p50_watched_actions","video_p75_watched_actions",
+  "video_p95_watched_actions","video_p100_watched_actions","video_thruplay_watched_actions","creative_id"];
+const AD_FIELDS_LITE=["id","name","campaign_id","amount_spent","impressions","reach","clicks","purchase_roas","actions:omni_purchase","actions:link_click"];
+const ACCT_FIELDS=["amount_spent","impressions","reach","frequency","cpm","cpc","ctr","clicks","purchase_roas","actions:omni_purchase","actions:link_click"];
+const CAMP_FIELDS=["id","name"].concat(ACCT_FIELDS);
+const DAILY_FIELDS=["id","name","amount_spent","impressions","clicks","reach","purchase_roas","actions:omni_purchase"];
+
+const METRICS={
+  spend:{label:"Spend",fmt:"money",dir:"neutral"},
+  purchases:{label:"Purchases",fmt:"int",dir:"up"},
+  pv:{label:"Purchase Value",fmt:"money",dir:"up"},
+  roas:{label:"ROAS",fmt:"x",dir:"up",tgt:"roas"},
+  cpa:{label:"CPA",fmt:"money",dir:"down",tgt:"cpa"},
+  aov:{label:"AOV",fmt:"money",dir:"up"},
+  cpc:{label:"CPC",fmt:"money",dir:"down",tgt:"cpc"},
+  cpm:{label:"CPM",fmt:"money",dir:"down",tgt:"cpm"},
+  ctr:{label:"CTR",fmt:"pct",dir:"up",tgt:"ctr"},
+  clicks:{label:"Clicks",fmt:"int",dir:"up"},
+  linkClicks:{label:"Link Clicks",fmt:"int",dir:"up"},
+  impressions:{label:"Impressions",fmt:"int",dir:"neutral"},
+  reach:{label:"Reach",fmt:"int",dir:"neutral"},
+  frequency:{label:"Frequency",fmt:"num2",dir:"down",tgt:"frequency"},
+  hookRate:{label:"25% View Rate",fmt:"pct",dir:"up"},
+  holdRate:{label:"Hold Rate",fmt:"pct",dir:"up"},
+  cvr:{label:"Click→Purchase",fmt:"pct",dir:"up"}
+};
+const DEFAULTS={
+  targets:{cpa:23.5,roas:2.0,ctr:2.5,cpc:1.5,cpm:35,frequency:2.0},
+  keyTiles:["spend","purchases","cpa","roas","pv","aov","cpc","cpm","ctr","frequency"],
+  cardMetrics:["spend","cpa","roas","pv","aov","frequency"],
+  compareOn:true,
+  defaultRange:"yesterday"
+};
+const RANGE_LABELS={today:"Today",yesterday:"Yesterday",last_7d:"Last 7 days",last_14d:"Last 14 days",last_30d:"Last 30 days",last_90d:"Last 90 days",this_month:"This month",last_month:"Last month",maximum:"Maximum"};
+
+/* ============================ STATE ============================ */
+const LS_KEY="adperf_settings_v2";
+let S=loadSettings();
+const State={
+  range:"last_14d", campaign:"all", custom:{since:null,until:null},
+  raw:{}, cur:null, prev:null, ads:[], groups:[], groupsPrev:{}, daily:[],
+  curDates:null, prevDates:null,
+  bkCache:{}, adAudience:null, adPlatform:null,
+  compare:new Set(), charts:[], sparkCharts:[]
+};
+function loadSettings(){
+  try{const v=JSON.parse(localStorage.getItem(LS_KEY));if(v&&v.targets)return Object.assign({},DEFAULTS,v,{targets:Object.assign({},DEFAULTS.targets,v.targets)});}catch(e){}
+  return JSON.parse(JSON.stringify(DEFAULTS));
+}
+function saveSettings(){try{localStorage.setItem(LS_KEY,JSON.stringify(S));}catch(e){}}
+
+/* ============================ DATA (snapshot) ============================ */
+/* Live Meta data is pre-fetched by a scheduled Claude agent into data.json.
+   The app just reads that snapshot — no connector bridge, no token, works on any phone. */
+let SNAP=null;
+async function loadSnapshot(){
+  if(SNAP) return SNAP;
+  const r=await fetch("data.json",{cache:"no-store"});
+  if(!r.ok) throw new Error("Couldn't load data.json ("+r.status+"). The snapshot may not have been generated yet.");
+  SNAP=await r.json();
+  return SNAP;
+}
+/* Resolver — drop-in replacement for the old connector call. Given the SAME
+   args the dashboard already builds, returns the matching pre-cached
+   ad_entities array. Everything downstream (loadAll, applyScope, breakdowns,
+   audience, every chart/tile/modal) is unchanged. */
+function callTool(args){
+  const bundle=SNAP&&SNAP.ranges&&SNAP.ranges[State.range];
+  if(!bundle) return [];
+  if(args.breakdowns) return (bundle.breakdowns&&bundle.breakdowns[args.breakdowns.join(",")])||[];
+  if(args.time_increment) return (bundle.current&&bundle.current.campaignsDaily)||[];
+  const section=args.time_range?bundle.previous:bundle.current;
+  if(!section) return [];
+  if(args.level==="account") return section.account||[];
+  if(args.level==="campaign") return section.campaigns||[];
+  if(args.level==="ad") return section.ads||[];
+  return [];
+}
+
+/* ============================ PARSE / DERIVE ============================ */
+function num(v){if(v==null)return 0;if(typeof v==="number")return v;const s=String(v);if(/not available/i.test(s))return 0;const n=parseFloat(s.replace(/[^0-9.\-]/g,""));return isNaN(n)?0:n;}
+function rowSums(r){
+  return {
+    spend:num(r.amount_spent),impr:num(r.impressions),clicks:num(r.clicks),reach:num(r.reach),
+    purch:num(r["actions:omni_purchase"]),linkClicks:num(r["actions:link_click"]),
+    pv:num(r.amount_spent)*num(r.purchase_roas),
+    p25:num(r.video_p25_watched_actions),p50:num(r.video_p50_watched_actions),
+    p75:num(r.video_p75_watched_actions),p95:num(r.video_p95_watched_actions),
+    p100:num(r.video_p100_watched_actions),thru:num(r.video_thruplay_watched_actions),n:1
+  };
+}
+const SUM_KEYS=["spend","impr","clicks","reach","purch","linkClicks","pv","p25","p50","p75","p95","p100","thru","n"];
+function addSums(a,b){const o={};for(const k of SUM_KEYS)o[k]=(a[k]||0)+(b[k]||0);return o;}
+function emptySums(){const o={};for(const k of SUM_KEYS)o[k]=0;return o;}
+function aggRows(rows){return rows.reduce((a,r)=>addSums(a,rowSums(r)),emptySums());}
+function derive(s){
+  return {
+    spend:s.spend,impressions:s.impr,clicks:s.clicks,reach:s.reach,purchases:s.purch,linkClicks:s.linkClicks,pv:s.pv,n:s.n,
+    cpa:s.purch?s.spend/s.purch:0, roas:s.spend?s.pv/s.spend:0, aov:s.purch?s.pv/s.purch:0,
+    cpc:s.clicks?s.spend/s.clicks:0, cpm:s.impr?s.spend/s.impr*1000:0, ctr:s.impr?s.clicks/s.impr*100:0,
+    frequency:s.reach?s.impr/s.reach:0, hookRate:s.impr?s.p25/s.impr*100:0, holdRate:s.p25?s.p100/s.p25*100:0,
+    cvr:s.linkClicks?s.purch/s.linkClicks*100:0, _sums:s
+  };
+}
+
+/* ============================ FORMAT ============================ */
+function fmt(val,kind){
+  if(val==null||isNaN(val))return "–";
+  switch(kind){
+    case "money":return "$"+val.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+    case "money0":return "$"+Math.round(val).toLocaleString();
+    case "int":return Math.round(val).toLocaleString();
+    case "pct":return val.toFixed(2)+"%";
+    case "x":return val.toFixed(2)+"x";
+    case "num2":return val.toFixed(2);
+    default:return String(val);
+  }
+}
+function fmtMetric(m,key){let v=m[key];if((key==="spend"||key==="pv")&&v>=10000)return "$"+(v/1000).toFixed(2)+"K";return fmt(v,METRICS[key].fmt);}
+function statusFor(key,value){
+  const d=METRICS[key];if(!d||!d.tgt||value==null||value===0)return "";
+  const t=S.targets[d.tgt];if(!t)return "";
+  if(d.dir==="down")return value<=t?"g":value<=t*1.12?"a":"r";
+  if(d.dir==="up")return value>=t?"g":value>=t*0.88?"a":"r";
+  return "";
+}
+function onTarget(key,value){
+  const d=METRICS[key];if(!d||!d.tgt)return null;const t=S.targets[d.tgt];if(!t||value==null)return null;
+  return d.dir==="down"?value<=t:value>=t;
+}
+function statusColor(st){return st==="g"?"var(--green)":st==="a"?"var(--amber)":st==="r"?"var(--red)":"";}
+function deltaInfo(key,cur,prev){
+  if(prev==null||prev===0||cur==null)return null;
+  const pct=(cur-prev)/Math.abs(prev)*100;const d=METRICS[key];let cls="flat";
+  if(Math.abs(pct)>=0.05){const better=d.dir==="up"?pct>0:d.dir==="down"?pct<0:null;cls=better==null?"flat":better?"up":"down";}
+  const arrow=pct>0.05?"▲":pct<-0.05?"▼":"–";
+  return {pct,cls,arrow};
+}
+function parseFbDate(s){if(!s)return null;const d=new Date(s);return isNaN(d)?null:d;}
+function ymd(d){return d.toISOString().slice(0,10);}
+
+/* ============================ LOAD ============================ */
+function clearChartsAll(){State.charts.forEach(c=>{try{c.destroy()}catch(e){}});State.charts=[];(State.sparkCharts||[]).forEach(c=>{try{c.destroy()}catch(e){}});State.sparkCharts=[];}
+function dateArgs(){
+  if(State.range==="custom"&&State.custom.since&&State.custom.until)
+    return {time_range:JSON.stringify({since:State.custom.since,until:State.custom.until})};
+  return {date_preset:State.range};
+}
+function rangeKey(){return State.range==="custom"?("custom|"+State.custom.since+"|"+State.custom.until):State.range;}
+async function loadAll(){
+  clearChartsAll();
+  State.bkCache={};State.adAudience=null;State.adPlatform=null;State.compare.clear();updateCmpBar();
+  const da=dateArgs();
+  const [accountCur,campaigns,campDaily,ads]=await Promise.all([
+    callTool(Object.assign({level:"account",fields:ACCT_FIELDS},da)),
+    callTool(Object.assign({level:"campaign",fields:CAMP_FIELDS,sort:"amount_spent_descending",limit:60},da)),
+    callTool(Object.assign({level:"campaign",fields:DAILY_FIELDS,time_increment:"1",limit:400},da)),
+    callTool(Object.assign({level:"ad",fields:AD_FIELDS,sort:"amount_spent_descending",limit:300},da))
+  ]);
+  State.raw={accountCur,campaigns:campaigns.filter(c=>num(c.amount_spent)>0),campDaily,ads,accountPrev:null,campaignsPrev:null,adsPrev:null};
+  const a0=accountCur[0]||ads[0];
+  State.curDates=a0?{since:parseFbDate(a0.date_start),until:parseFbDate(a0.date_stop)}:null;
+  State.prevDates=null;
+  if(S.compareOn&&State.curDates&&State.curDates.since){
+    const cd=State.curDates;const len=Math.round((cd.until-cd.since)/86400000)+1;
+    const pUntil=new Date(cd.since);pUntil.setDate(pUntil.getDate()-1);
+    const pSince=new Date(pUntil);pSince.setDate(pSince.getDate()-(len-1));
+    State.prevDates={since:pSince,until:pUntil};
+    const tr=JSON.stringify({since:ymd(pSince),until:ymd(pUntil)});
+    try{
+      const [accountPrev,campaignsPrev,adsPrev]=await Promise.all([
+        callTool({level:"account",fields:ACCT_FIELDS,time_range:tr}),
+        callTool({level:"campaign",fields:CAMP_FIELDS,time_range:tr,limit:60}),
+        callTool({level:"ad",fields:AD_FIELDS_LITE,time_range:tr,sort:"amount_spent_descending",limit:300})
+      ]);
+      State.raw.accountPrev=accountPrev;State.raw.campaignsPrev=campaignsPrev;State.raw.adsPrev=adsPrev;
+    }catch(e){}
+  }
+  populateCampaigns();
+  applyScope();
+}
+function populateCampaigns(){
+  const sel=document.getElementById("campSel");
+  const prev=State.campaign;
+  sel.innerHTML='<option value="all">All campaigns</option>';
+  (State.raw.campaigns||[]).forEach(c=>{const o=document.createElement("option");o.value=c.id;o.textContent=c.name;sel.appendChild(o);});
+  if(prev!=="all"&&!(State.raw.campaigns||[]).some(c=>c.id===prev))State.campaign="all";
+  sel.value=State.campaign;
+}
+function applyScope(){
+  const raw=State.raw,camp=State.campaign;
+  State.cur = camp==="all" ? derive(aggRows(raw.accountCur||[])) : derive(rowSums((raw.campaigns||[]).find(c=>c.id===camp)||{}));
+  if(S.compareOn&&raw.accountPrev){
+    State.prev = camp==="all" ? derive(aggRows(raw.accountPrev)) : (()=>{const r=(raw.campaignsPrev||[]).find(c=>c.id===camp);return r?derive(rowSums(r)):null;})();
+  } else State.prev=null;
+  let ads=(raw.ads||[]).map(r=>({id:r.id,name:r.name,campaign_id:r.campaign_id,creative_id:r.creative_id,sums:rowSums(r),m:derive(rowSums(r))}));
+  if(camp!=="all") ads=ads.filter(a=>a.campaign_id===camp);
+  ads=ads.filter(a=>a.sums.spend>0||a.sums.impr>0).sort((a,b)=>b.sums.spend-a.sums.spend);
+  State.ads=ads; State.groups=buildGroups(ads);
+  State.groupsPrev={};
+  if(S.compareOn&&raw.adsPrev){
+    let ap=raw.adsPrev.map(r=>({id:r.id,name:r.name,campaign_id:r.campaign_id,sums:rowSums(r),m:derive(rowSums(r))}));
+    if(camp!=="all") ap=ap.filter(a=>a.campaign_id===camp);
+    buildGroups(ap).forEach(g=>State.groupsPrev[g.name]=g);
+  }
+  const dmap={};
+  (raw.campDaily||[]).forEach(r=>{
+    if(!r.date_start)return; if(camp!=="all"&&r.id!==camp)return;
+    const s=rowSums(r); if(s.spend<=0&&s.impr<=0)return;
+    if(!dmap[r.date_start])dmap[r.date_start]=emptySums();
+    dmap[r.date_start]=addSums(dmap[r.date_start],s);
+  });
+  State.daily=Object.entries(dmap).map(([date,s])=>({date,m:derive(s)})).sort((a,b)=>parseFbDate(a.date)-parseFbDate(b.date));
+}
+function buildGroups(ads){
+  const map={};
+  ads.forEach(a=>{
+    if(!map[a.name])map[a.name]={name:a.name,sums:emptySums(),ids:[],items:[],creativeIds:[]};
+    const g=map[a.name];g.sums=addSums(g.sums,a.sums);g.ids.push(a.id);g.items.push(a);if(a.creative_id)g.creativeIds.push(a.creative_id);
+  });
+  return Object.values(map).map(g=>{g.m=derive(g.sums);return g;}).sort((x,y)=>y.m.spend-x.m.spend);
+}
+async function loadBreakdownRaw(dimKey){
+  const ck=dimKey+"|"+rangeKey();
+  if(State.bkCache[ck])return State.bkCache[ck];
+  const def=BK_DIMS[dimKey];
+  const rows=await callTool(Object.assign({level:"ad",fields:["id","name","campaign_id","amount_spent","impressions","reach","clicks","purchase_roas","actions:omni_purchase"],breakdowns:def.bk,limit:1000},dateArgs()));
+  State.bkCache[ck]=rows;return rows;
+}
+async function ensureAdBreakdowns(){
+  if(State.adAudience&&State.adPlatform)return;
+  const [aud,plat]=await Promise.all([
+    callTool(Object.assign({level:"ad",fields:["id","name","amount_spent","impressions","purchase_roas","actions:omni_purchase"],breakdowns:["age","gender"],limit:1000},dateArgs())),
+    callTool(Object.assign({level:"ad",fields:["id","name","amount_spent","impressions","purchase_roas","actions:omni_purchase"],breakdowns:["publisher_platform"],limit:600},dateArgs()))
+  ]);
+  State.adAudience=aud;State.adPlatform=plat;
+}
+
+/* ============================ RENDER SHELL ============================ */
+function el(html){const t=document.createElement("template");t.innerHTML=html.trim();return t.content.firstElementChild;}
+function render(){
+  clearChartsAll();
+  const app=document.getElementById("app");app.innerHTML="";
+  app.appendChild(renderKeyMetrics());
+  app.appendChild(renderRolling());
+  app.appendChild(renderTrend());
+  app.appendChild(renderBreakdown());
+  app.appendChild(renderTopSpend());
+  app.appendChild(renderTopPerforming());
+  requestAnimationFrame(()=>{drawSparklines();drawTrend();drawBreakdownChart();drawTopSpendChart();});
+}
+
+/* ---- Key metrics ---- */
+let tilesEditMode=false,dragKey=null;
+function renderKeyMetrics(){
+  const sec=el(`<div class="section" id="kmSection"><div class="section-head"><h2>Key Metrics</h2><span class="sub" id="rangeLabel"></span><div class="right"><span class="legend"><span><span class="sw" style="background:var(--green)"></span>on target</span><span><span class="sw" style="background:var(--amber)"></span>near</span><span><span class="sw" style="background:var(--red)"></span>off</span></span><button class="btn" id="kmEdit">✎ Edit tiles</button></div></div><div class="grid-metrics" id="tiles"></div><div class="km-hint muted" id="kmHint" style="display:none">Drag tiles to reorder · click × to remove · use "Add metric" to add. Changes save automatically. Click a tile (when not editing) to see its full trend.</div></div>`);
+  const editBtn=sec.querySelector("#kmEdit");
+  editBtn.onclick=()=>{tilesEditMode=!tilesEditMode;editBtn.textContent=tilesEditMode?"✓ Done":"✎ Edit tiles";editBtn.classList.toggle("primary",tilesEditMode);const h=document.getElementById("kmHint");if(h)h.style.display=tilesEditMode?"block":"none";refreshTiles();};
+  fillTiles(sec.querySelector("#tiles"));
+  setTimeout(()=>{const l=document.getElementById("rangeLabel");if(l&&State.curDates&&State.curDates.since)l.textContent=fbRangeLabel();},0);
+  return sec;
+}
+function fillTiles(tilesEl){
+  tilesEl.innerHTML="";tilesEl.classList.toggle("editing",tilesEditMode);
+  const m=State.cur||{};
+  S.keyTiles.forEach(key=>{
+    if(!METRICS[key])return;
+    const v=m[key],st=statusFor(key,v),di=State.prev?deltaInfo(key,v,State.prev[key]):null;
+    const t=el(`<div class="tile" data-tilekey="${key}"></div>`);
+    t.innerHTML=`${tilesEditMode?'<button class="tile-x" title="Remove tile">×</button>':''}
+      <div class="lab">${st?`<span class="dot-status" style="background:${statusColor(st)}"></span>`:""}${METRICS[key].label}${tilesEditMode?'<span class="drag-h" title="Drag to reorder">⠿</span>':''}</div>
+      <div class="val">${fmtMetric(m,key)}</div>
+      <div class="delta ${di?di.cls:"flat"}">${di?`${di.arrow} ${Math.abs(di.pct).toFixed(1)}%`:"&nbsp;"}</div>
+      <div class="sparkwrap"><canvas data-key="${key}"></canvas></div>`;
+    if(tilesEditMode){
+      // Desktop: native HTML5 drag-and-drop
+      t.draggable=true;
+      t.addEventListener("dragstart",e=>{dragKey=key;t.classList.add("dragging");e.dataTransfer.effectAllowed="move";});
+      t.addEventListener("dragend",()=>{t.classList.remove("dragging");tilesEl.querySelectorAll(".tile.over").forEach(x=>x.classList.remove("over"));});
+      t.addEventListener("dragover",e=>{e.preventDefault();e.dataTransfer.dropEffect="move";t.classList.add("over");});
+      t.addEventListener("dragleave",()=>t.classList.remove("over"));
+      t.addEventListener("drop",e=>{e.preventDefault();t.classList.remove("over");reorderTile(dragKey,key);});
+      // Touch: HTML5 DnD does not fire on touchscreens — emulate with touch events
+      t.addEventListener("touchstart",()=>{dragKey=key;t.classList.add("dragging");},{passive:true});
+      t.addEventListener("touchmove",e=>{
+        const tt=e.touches[0];if(!tt)return;e.preventDefault();
+        const under=document.elementFromPoint(tt.clientX,tt.clientY);
+        const tile=under&&under.closest?under.closest(".tile"):null;
+        tilesEl.querySelectorAll(".tile.over").forEach(x=>x.classList.remove("over"));
+        if(tile&&tile!==t&&tilesEl.contains(tile)&&tile.dataset.tilekey)tile.classList.add("over");
+      },{passive:false});
+      t.addEventListener("touchend",()=>{
+        t.classList.remove("dragging");
+        const over=tilesEl.querySelector(".tile.over");
+        if(over&&over.dataset.tilekey)reorderTile(dragKey,over.dataset.tilekey);
+        tilesEl.querySelectorAll(".tile.over").forEach(x=>x.classList.remove("over"));
+      });
+      t.querySelector(".tile-x").onclick=e=>{e.stopPropagation();removeTile(key);};
+    }else{
+      t.style.cursor="pointer";t.title="Click to see the full trend";
+      t.onclick=()=>openMetricDetail(key);
+    }
+    tilesEl.appendChild(t);
+  });
+  if(tilesEditMode){
+    const avail=Object.keys(METRICS).filter(k=>!S.keyTiles.includes(k));
+    const add=el(`<div class="tile tile-add"></div>`);
+    add.innerHTML=`<div class="lab">Add metric</div><select id="addTileSel"><option value="">+ choose…</option>${avail.map(k=>`<option value="${k}">${METRICS[k].label}</option>`).join("")}</select><div class="muted" style="font-size:10.5px;margin-top:auto">${avail.length} available</div>`;
+    add.querySelector("select").onchange=e=>{if(e.target.value)addTile(e.target.value);};
+    tilesEl.appendChild(add);
+  }
+}
+function refreshTiles(){const t=document.getElementById("tiles");if(t){fillTiles(t);drawSparklines();}}
+function reorderTile(from,to){if(!from||from===to)return;const arr=S.keyTiles.slice();const fi=arr.indexOf(from);if(fi<0)return;arr.splice(fi,1);let ti=arr.indexOf(to);if(ti<0)ti=arr.length;arr.splice(ti,0,from);S.keyTiles=arr;saveSettings();refreshTiles();}
+function removeTile(key){const n=S.keyTiles.filter(k=>k!==key);if(n.length)S.keyTiles=n;saveSettings();refreshTiles();}
+function addTile(key){if(!S.keyTiles.includes(key)){S.keyTiles.push(key);saveSettings();refreshTiles();}}
+function scopeLabel(){if(State.campaign==="all")return "All campaigns";const c=(State.raw.campaigns||[]).find(x=>x.id===State.campaign);return c?c.name:"Campaign";}
+function openMetricDetail(key){
+  if(!METRICS[key])return;
+  const d=METRICS[key],m=State.cur||{},pm=State.prev;
+  const series=State.daily.map(x=>x.m[key]||0).filter(v=>!isNaN(v));
+  const hasDaily=series.some(v=>v>0);
+  const cur=m[key],prev=pm?pm[key]:null,di=prev!=null?deltaInfo(key,cur,prev):null;
+  const avg=series.length?series.reduce((a,b)=>a+b,0)/series.length:0;
+  const mn=series.length?Math.min(...series):0,mx=series.length?Math.max(...series):0;
+  const tgtVal=d.tgt?S.targets[d.tgt]:null;
+  const modal=document.getElementById("modal");
+  modal.innerHTML=`<div class="modal-head"><h3>${d.label} — trend</h3>
+      <span class="pill ${statusFor(key,cur)||'n'}">${fmtMetric(m,key)}</span>
+      ${di?`<span class="pill ${di.cls==='up'?'g':di.cls==='down'?'r':'n'}">${di.arrow} ${Math.abs(di.pct).toFixed(1)}% vs prev</span>`:""}
+      <button class="x" id="mClose">×</button></div>
+    <div class="modal-body">
+      <div class="card chart-box" style="box-shadow:none">${hasDaily?`<div class="chartwrap" style="height:340px"><canvas id="bigTrend"></canvas></div><div class="legend" id="bigLegend" style="margin-top:8px"></div>`:`<div class="muted" style="padding:34px;text-align:center">No daily breakdown is available for ${d.label} in this range — it's only reported as a period total.</div>`}</div>
+      <div class="mgrid" style="margin-top:12px">
+        <div class="mcell"><div class="k">Current · ${scopeLabel()}</div><div class="v">${fmtMetric(m,key)}</div></div>
+        ${prev!=null?`<div class="mcell"><div class="k">Previous period</div><div class="v">${fmt(prev,d.fmt)}</div></div>`:""}
+        ${hasDaily?`<div class="mcell"><div class="k">Daily average</div><div class="v">${fmt(avg,d.fmt)}</div></div>
+        <div class="mcell"><div class="k">Highest day</div><div class="v">${fmt(mx,d.fmt)}</div></div>
+        <div class="mcell"><div class="k">Lowest day</div><div class="v">${fmt(mn,d.fmt)}</div></div>`:""}
+        ${tgtVal!=null?`<div class="mcell"><div class="k">Target</div><div class="v">${fmt(tgtVal,d.fmt)}</div></div>`:""}
+      </div></div>`;
+  modal.querySelector("#mClose").onclick=closeModal;
+  document.getElementById("overlay").classList.add("show");
+  if(hasDaily)requestAnimationFrame(()=>drawBigTrend(key));
+}
+function drawBigTrend(key){
+  const cv=document.getElementById("bigTrend");if(!cv)return;
+  const d=METRICS[key];
+  const labels=State.daily.map(x=>{const dt=parseFbDate(x.date);return dt?dt.toLocaleDateString(undefined,{month:"short",day:"numeric"}):x.date;});
+  const data=State.daily.map(x=>x.m[key]||0);
+  const tgtVal=d.tgt?S.targets[d.tgt]:null;
+  const ptColors=data.map(v=>{const ok=onTarget(key,v);return ok==null?"#f0682a":ok?"#1a9d63":"#d6452f";});
+  const isBar=["spend","purchases","impressions","clicks","reach","linkClicks"].includes(key);
+  const main={type:isBar?"bar":"line",label:d.label,data,borderColor:tgtVal!=null?"#33405a":"#f0682a",backgroundColor:isBar?ptColors:"rgba(240,104,42,.10)",borderWidth:2,tension:.3,fill:!isBar&&tgtVal==null,pointRadius:isBar?0:3,pointBackgroundColor:ptColors,pointBorderColor:ptColors,order:2};
+  const ds=[main];
+  if(tgtVal!=null)ds.push({type:"line",label:"Target",data:labels.map(()=>tgtVal),borderColor:"#1a9d63",borderDash:[6,4],borderWidth:1.6,pointRadius:0,fill:false,order:1});
+  if(cv._chart)cv._chart.destroy();
+  cv._chart=new Chart(cv,{data:{labels,datasets:ds},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+": "+fmt(c.parsed.y,d.fmt)}}},scales:{y:{beginAtZero:isBar,grid:{color:"#eef0f4"},ticks:{font:{size:10},callback:v=>fmt(v,d.fmt)}},x:{grid:{display:false},ticks:{font:{size:10}}}}}});
+  State.charts.push(cv._chart);
+  const lg=document.getElementById("bigLegend");
+  if(lg)lg.innerHTML=tgtVal!=null?`<span><span class="sw" style="background:var(--green)"></span>on-target day</span><span><span class="sw" style="background:var(--red)"></span>off-target day</span><span><span class="sw" style="display:inline-block;background:var(--green);height:2px;width:14px;border-radius:0"></span>target ${fmt(tgtVal,d.fmt)}</span>`:`<span class="muted">Daily ${d.label} across the selected period.</span>`;
+}
+function fbRangeLabel(){
+  const o={month:"short",day:"numeric"};
+  let s=`${State.curDates.since.toLocaleDateString(undefined,o)} – ${State.curDates.until.toLocaleDateString(undefined,o)}`;
+  if(State.prevDates)s+=`  ·  vs prev ${State.prevDates.since.toLocaleDateString(undefined,o)} – ${State.prevDates.until.toLocaleDateString(undefined,o)}`;
+  return s;
+}
+function drawSparklines(){
+  (State.sparkCharts||[]).forEach(c=>{try{c.destroy()}catch(e){}});State.sparkCharts=[];
+  document.querySelectorAll("canvas[data-key]").forEach(cv=>{
+    const key=cv.dataset.key;const data=State.daily.map(d=>d.m[key]||0);
+    if(!data.length)return;
+    const ch=new Chart(cv,{type:"line",data:{labels:data.map((_,i)=>i),datasets:[{data,borderColor:"#f0682a",borderWidth:1.5,pointRadius:0,tension:.35,fill:true,backgroundColor:"rgba(240,104,42,.10)"}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{enabled:false}},scales:{x:{display:false},y:{display:false}},animation:false}});
+    State.sparkCharts.push(ch);
+  });
+}
+
+/* ---- Rolling averages ---- */
+function rollLast(n){const d=State.daily;if(!d.length)return derive(emptySums());const slice=d.slice(Math.max(0,d.length-n));const s=slice.reduce((a,x)=>addSums(a,x.m._sums),emptySums());return derive(s);}
+function renderRolling(){
+  const d3=rollLast(3),d7=rollLast(7),dN=rollLast(State.daily.length);
+  const days=State.daily.length;
+  const sec=el(`<div class="section"><div class="section-head"><h2>Rolling Averages</h2><span class="sub">Most recent days · scope-aware</span></div>
+    <div class="card"><div class="rollwrap">
+      <div class="rollcell"><div class="k">3-day CPA</div><div class="v" style="${statusColor(statusFor("cpa",d3.cpa))?`color:${statusColor(statusFor("cpa",d3.cpa))}`:""}">${fmt(d3.cpa,"money")}</div><div class="sec">ROAS ${d3.roas.toFixed(2)}x · ${fmt(d3.spend/3,"money0")}/day</div></div>
+      <div class="rollcell"><div class="k">7-day CPA</div><div class="v" style="${statusColor(statusFor("cpa",d7.cpa))?`color:${statusColor(statusFor("cpa",d7.cpa))}`:""}">${fmt(d7.cpa,"money")}</div><div class="sec">ROAS ${d7.roas.toFixed(2)}x · ${fmt(d7.spend/Math.min(7,days||1),"money0")}/day</div></div>
+      <div class="rollcell"><div class="k">3-day ROAS</div><div class="v" style="${statusColor(statusFor("roas",d3.roas))?`color:${statusColor(statusFor("roas",d3.roas))}`:""}">${d3.roas.toFixed(2)}x</div><div class="sec">${fmt(d3.pv,"money0")} on ${fmt(d3.spend,"money0")}</div></div>
+      <div class="rollcell"><div class="k">7-day ROAS</div><div class="v" style="${statusColor(statusFor("roas",d7.roas))?`color:${statusColor(statusFor("roas",d7.roas))}`:""}">${d7.roas.toFixed(2)}x</div><div class="sec">${fmt(d7.pv,"money0")} on ${fmt(d7.spend,"money0")}</div></div>
+      <div class="rollcell"><div class="k">Period CPA</div><div class="v">${fmt(dN.cpa,"money")}</div><div class="sec">${days} day${days!==1?"s":""} · ${fmt(dN.purchases,"int")} purch</div></div>
+    </div></div></div>`);
+  return sec;
+}
+
+/* ---- Daily trend (with target line) ---- */
+const TREND_METRICS=["spend","roas","cpa","purchases","cpm","ctr","cpc"];
+function renderTrend(){
+  const sec=el(`<div class="section"><div class="section-head"><h2>Daily Trend</h2><span class="sub" id="trendSub">vs target line</span>
+    <div class="right"><select id="trendMetric"></select></div></div>
+    <div class="card chart-box"><div class="chartwrap" style="height:300px"><canvas id="trendChart"></canvas></div>
+    <div class="legend" id="trendLegend" style="margin-top:8px"></div></div></div>`);
+  const sel=sec.querySelector("#trendMetric");
+  TREND_METRICS.forEach(k=>{const o=document.createElement("option");o.value=k;o.textContent=METRICS[k].label;sel.appendChild(o);});
+  sel.value="cpa";
+  sel.onchange=()=>drawTrend();
+  return sec;
+}
+function drawTrend(){
+  const cv=document.getElementById("trendChart");if(!cv)return;
+  const key=document.getElementById("trendMetric").value;
+  const labels=State.daily.map(d=>{const dt=parseFbDate(d.date);return dt?dt.toLocaleDateString(undefined,{month:"short",day:"numeric"}):d.date;});
+  const data=State.daily.map(d=>d.m[key]||0);
+  const tgtKey=METRICS[key].tgt;const tgtVal=tgtKey?S.targets[tgtKey]:null;
+  if(cv._chart)cv._chart.destroy();
+  const isBar=key==="spend"||key==="purchases";
+  const ptColors=data.map(v=>{const ok=onTarget(key,v);return ok==null?"#f0682a":ok?"#1a9d63":"#d6452f";});
+  const main={type:isBar?"bar":"line",label:METRICS[key].label,data,
+      borderColor:tgtVal!=null?"#33405a":"#f0682a",
+      backgroundColor:isBar?ptColors:"rgba(240,104,42,.08)",
+      borderWidth:2,tension:.3,fill:!isBar&&tgtVal==null,
+      pointRadius:isBar?0:3,pointBackgroundColor:ptColors,pointBorderColor:ptColors,order:2};
+  const datasets=[main];
+  if(tgtVal!=null)datasets.push({type:"line",label:"Target ("+fmt(tgtVal,METRICS[key].fmt)+")",data:labels.map(()=>tgtVal),borderColor:"#1a9d63",borderDash:[6,4],borderWidth:1.6,pointRadius:0,fill:false,order:1});
+  cv._chart=new Chart(cv,{data:{labels,datasets},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+": "+fmt(c.parsed.y,METRICS[key].fmt)}}},
+      scales:{y:{beginAtZero:isBar,grid:{color:"#eef0f4"},ticks:{font:{size:10},callback:v=>fmt(v,METRICS[key].fmt)}},x:{grid:{display:false},ticks:{font:{size:10}}}}}});
+  State.charts.push(cv._chart);
+  const lg=document.getElementById("trendLegend");
+  if(lg)lg.innerHTML = tgtVal!=null
+    ? `<span><span class="sw" style="background:var(--green)"></span>day on target</span><span><span class="sw" style="background:var(--red)"></span>day off target</span><span><span class="sw" style="background:var(--green);height:2px;width:14px;border-radius:0"></span>target ${fmt(tgtVal,METRICS[key].fmt)}</span>`
+    : `<span class="muted">No target set for ${METRICS[key].label} — set one in Settings to see a target line.</span>`;
+}
+
+/* ---- Breakdowns ---- */
+const BK_DIMS={
+  platform:{label:"Platform",bk:["publisher_platform"]},
+  placement:{label:"Placement",bk:["platform_position"]},
+  device:{label:"Device",bk:["impression_device"]},
+  age:{label:"Age",bk:["age"]},
+  gender:{label:"Gender",bk:["gender"]},
+  agegender:{label:"Age & Gender",bk:["age","gender"]},
+  country:{label:"Country",bk:["country"]},
+  region:{label:"Region",bk:["region"]}
+};
+const BK_METRICS=["spend","purchases","cpa","roas","pv","cpc","cpm","ctr","impressions","reach","clicks","aov","frequency"];
+let bkState={dim:"platform",metric:"spend"};
+function renderBreakdown(){
+  const sec=el(`<div class="section"><div class="section-head"><h2>Breakdowns</h2><span class="sub">Slice any metric by audience or placement</span>
+    <div class="right"><select id="bkDim"></select><select id="bkMetric"></select></div></div>
+    <div class="card"><div class="bk-wrap"><div class="chartwrap" style="height:340px"><canvas id="bkChart"></canvas></div><div id="bkTableWrap"></div></div></div></div>`);
+  const dim=sec.querySelector("#bkDim"),met=sec.querySelector("#bkMetric");
+  Object.entries(BK_DIMS).forEach(([k,d])=>{const o=document.createElement("option");o.value=k;o.textContent=d.label;dim.appendChild(o);});
+  BK_METRICS.forEach(k=>{const o=document.createElement("option");o.value=k;o.textContent=METRICS[k].label;met.appendChild(o);});
+  dim.value=bkState.dim;met.value=bkState.metric;
+  dim.onchange=()=>{bkState.dim=dim.value;drawBreakdownChart();};
+  met.onchange=()=>{bkState.metric=met.value;drawBreakdownChart();};
+  return sec;
+}
+async function drawBreakdownChart(){
+  const cv=document.getElementById("bkChart"),tw=document.getElementById("bkTableWrap");
+  if(!cv)return;tw.innerHTML=`<div class="muted" style="padding:10px">Loading…</div>`;
+  let rows;
+  try{rows=await loadBreakdownRaw(bkState.dim);}catch(e){tw.innerHTML=`<div class="muted" style="padding:10px">Couldn't load this breakdown.</div>`;return;}
+  const def=BK_DIMS[bkState.dim],map={};
+  rows.forEach(r=>{
+    if(State.campaign!=="all"&&r.campaign_id!==State.campaign)return;
+    const s=rowSums(r);if(s.spend<=0&&s.impr<=0)return;
+    const label=def.bk.map(k=>r[k]).filter(Boolean).join(" · ")||"Unknown";
+    if(!map[label])map[label]=emptySums();map[label]=addSums(map[label],s);
+  });
+  const key=bkState.metric;
+  let buckets=Object.entries(map).map(([label,s])=>({label,m:derive(s)})).sort((a,b)=>(b.m[key]||0)-(a.m[key]||0)).slice(0,12);
+  if(!cv){return;}
+  if(cv._chart)cv._chart.destroy();
+  cv._chart=new Chart(cv,{type:"bar",data:{labels:buckets.map(b=>b.label),datasets:[{label:METRICS[key].label,data:buckets.map(b=>b.m[key]||0),backgroundColor:"rgba(124,108,240,.65)",borderRadius:5}]},
+    options:{indexAxis:"y",responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>METRICS[key].label+": "+fmt(c.parsed.x,METRICS[key].fmt)}}},
+      scales:{x:{grid:{color:"#eef0f4"},ticks:{font:{size:10},callback:v=>fmt(v,METRICS[key].fmt)}},y:{grid:{display:false},ticks:{font:{size:11}}}}}});
+  State.charts.push(cv._chart);
+  let html=`<table class="bk-table"><thead><tr><th>${def.label}</th><th>Spend</th><th>ROAS</th><th>CPA</th><th>Purch</th></tr></thead><tbody>`;
+  buckets.forEach(b=>{const m=b.m;html+=`<tr><td>${b.label}</td><td>${fmt(m.spend,"money0")}</td><td>${m.roas?m.roas.toFixed(2):"–"}</td><td>${m.cpa?fmt(m.cpa,"money"):"–"}</td><td>${fmt(m.purchases,"int")}</td></tr>`;});
+  html+=`</tbody></table>`;tw.innerHTML=html;
+}
+
+/* ---- Top Spend ---- */
+let topSpendMode="name";
+function renderTopSpend(){
+  const sec=el(`<div class="section"><div class="section-head"><h2>Top Spend</h2><span class="sub">Spend vs CPA · grouped by ad name</span>
+    <div class="right"><div class="seg"><button data-m="name" class="active">By name</button><button data-m="ad">By ad</button></div></div></div>
+    <div class="card chart-box"><div class="chartwrap" style="height:300px"><canvas id="topSpendChart"></canvas></div>
+    <div class="legend" style="margin-top:8px"><span><span class="sw" style="background:rgba(124,108,240,.75)"></span>Spend</span><span><span class="sw" style="background:var(--accent)"></span>CPA</span><span class="muted">· click a bar for detail</span></div></div></div>`);
+  sec.querySelectorAll(".seg button").forEach(b=>b.onclick=()=>{sec.querySelectorAll(".seg button").forEach(x=>x.classList.remove("active"));b.classList.add("active");topSpendMode=b.dataset.m;drawTopSpendChart();});
+  return sec;
+}
+function topSpendData(){
+  return (topSpendMode==="ad"?State.ads.slice(0,9).map(a=>({label:a.name,m:a.m,key:a.name})):State.groups.slice(0,9).map(g=>({label:g.name,m:g.m,key:g.name})));
+}
+function drawTopSpendChart(){
+  const cv=document.getElementById("topSpendChart");if(!cv)return;
+  const rows=topSpendData();
+  if(cv._chart)cv._chart.destroy();
+  cv._chart=new Chart(cv,{data:{labels:rows.map(r=>r.label),datasets:[
+    {type:"bar",label:"Spend",data:rows.map(r=>r.m.spend),backgroundColor:"rgba(124,108,240,.75)",borderRadius:5,yAxisID:"y"},
+    {type:"line",label:"CPA",data:rows.map(r=>r.m.cpa),borderColor:"#f0682a",backgroundColor:"#f0682a",borderWidth:2,pointRadius:3,yAxisID:"y1",tension:.3}
+  ]},
+    options:{responsive:true,maintainAspectRatio:false,onClick:(e,els)=>{if(els.length)openDetail(rows[els[0].index].key);},
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+": "+fmt(c.parsed.y,c.dataset.label==="Spend"?"money0":"money")}}},
+      scales:{y:{position:"left",beginAtZero:true,grid:{color:"#eef0f4"},ticks:{font:{size:10},callback:v=>"$"+(v>=1000?(v/1000)+"k":v)}},
+        y1:{position:"right",beginAtZero:true,grid:{display:false},ticks:{font:{size:10},callback:v=>"$"+v}},
+        x:{grid:{display:false},ticks:{font:{size:10},maxRotation:0,callback:function(v){const l=this.getLabelForValue(v);return l.length>12?l.slice(0,11)+"…":l;}}}}}});
+  State.charts.push(cv._chart);
+}
+
+/* ---- Top Performing ---- */
+let sortBy="cpa";
+function renderTopPerforming(){
+  const sec=el(`<div class="section"><div class="section-head"><h2>Top Performing</h2><span class="sub">Grouped by ad name · color-coded vs targets</span>
+    <div class="right"><span class="muted" style="font-size:11px">Sort</span><select id="sortSel">
+      <option value="cpa">Best CPA</option><option value="roas">Best ROAS</option><option value="spend">Most Spend</option><option value="purchases">Most Purchases</option><option value="pv">Most Revenue</option></select></div></div>
+    <div class="cards" id="cardGrid"></div></div>`);
+  const sel=sec.querySelector("#sortSel");sel.value=sortBy;
+  sel.onchange=()=>{sortBy=sel.value;sec.querySelector("#cardGrid").replaceWith(buildCardGrid());};
+  setTimeout(()=>{const g=sec.querySelector("#cardGrid");if(g)g.replaceWith(buildCardGrid());},0);
+  return sec;
+}
+function sortedGroups(){
+  const g=State.groups.filter(x=>x.m.spend>0).slice();
+  if(sortBy==="cpa")g.sort((a,b)=>(a.m.cpa||1e9)-(b.m.cpa||1e9));
+  else g.sort((a,b)=>(b.m[sortBy]||0)-(a.m[sortBy]||0));
+  return g;
+}
+function buildCardGrid(){
+  const grid=el(`<div class="cards" id="cardGrid"></div>`);
+  const groups=sortedGroups();
+  groups.forEach((g,i)=>grid.appendChild(buildCard(g,i)));
+  if(!groups.length)grid.innerHTML=`<div class="muted">No active ads in this period / campaign.</div>`;
+  return grid;
+}
+function buildCard(g,idx){
+  const m=g.m;const hue=statusFor("cpa",m.cpa);
+  const accent=hue==="g"?"#1a9d63":hue==="a"?"#c9870a":hue==="r"?"#d6452f":"#3b414e";
+  const card=el(`<div class="adcard"></div>`);
+  const chips=S.cardMetrics.map(k=>{const st=statusFor(k,m[k]);return `<div class="chip ${st}"><div class="k">${METRICS[k].label}</div><div class="v">${fmtMetric(m,k)}</div></div>`;}).join("");
+  const inCmp=State.compare.has(g.name);
+  card.innerHTML=`
+    <div class="thumb" style="background:linear-gradient(135deg,${accent},#3a4150)">
+      <div class="rk">#${idx+1}</div><div class="cnt">${g.ids.length} ad${g.ids.length>1?"s":""}</div>
+      <div class="play">▶</div>
+      <div class="cmp-check"><input type="checkbox" ${inCmp?"checked":""}> compare</div>
+    </div>
+    <div class="body"><div class="nm" title="${g.name}">${g.name}</div><div class="chips">${chips}</div></div>
+    <div class="cardfoot"><div class="mini" data-act="detail">Metrics</div><div class="mini" data-act="creative">Creative</div></div>`;
+  card.querySelector(".thumb").onclick=(e)=>{if(e.target.closest(".cmp-check"))return;openDetail(g.name,"video");};
+  card.querySelector(".body").onclick=()=>openDetail(g.name,"perf");
+  card.querySelector('[data-act="detail"]').onclick=(e)=>{e.stopPropagation();openDetail(g.name,"perf");};
+  card.querySelector('[data-act="creative"]').onclick=(e)=>{e.stopPropagation();openDetail(g.name,"video");};
+  const cb=card.querySelector(".cmp-check input");
+  cb.onclick=(e)=>{e.stopPropagation();if(cb.checked)State.compare.add(g.name);else State.compare.delete(g.name);updateCmpBar();};
+  return card;
+}
+
+/* ============================ DETAIL MODAL ============================ */
+let detailState={name:null,tab:"perf"};
+function openDetail(name,tab){const g=State.groups.find(x=>x.name===name);if(!g)return;detailState={name,tab:tab||"perf"};drawModal();document.getElementById("overlay").classList.add("show");}
+function closeModal(){document.getElementById("overlay").classList.remove("show");}
+function retentionPoints(s){
+  const impr=s.impr||0;if(!impr)return [0,0,0,0,0,0];
+  let raw=[100,s.p25/impr*100,s.p50/impr*100,s.p75/impr*100,s.p95/impr*100,s.p100/impr*100];
+  for(let i=1;i<raw.length;i++){if(raw[i]>raw[i-1])raw[i]=raw[i-1];if(raw[i]<0)raw[i]=0;}
+  return raw;
+}
+const RET_LABELS=["Impression","25%","50%","75%","95%","100%"];
+function drawModal(){
+  const g=State.groups.find(x=>x.name===detailState.name);if(!g)return;
+  const m=g.m,prev=State.groupsPrev[g.name];
+  const modal=document.getElementById("modal");
+  modal.innerHTML=`
+    <div class="modal-head"><h3>${g.name}</h3><span class="pill n">${g.ids.length} ad${g.ids.length>1?"s":""} grouped</span>
+      <span class="pill ${statusFor("cpa",m.cpa)||"n"}">CPA ${fmt(m.cpa,"money")}</span>
+      <span class="pill ${statusFor("roas",m.roas)||"n"}">ROAS ${m.roas.toFixed(2)}x</span>
+      <button class="x" id="mClose">×</button></div>
+    <div class="tabs"><button data-t="perf">Performance</button><button data-t="video">Video &amp; Creative</button><button data-t="aud">Audience</button></div>
+    <div class="modal-body" id="mBody"></div>`;
+  modal.querySelector("#mClose").onclick=closeModal;
+  modal.querySelectorAll(".tabs button").forEach(b=>{if(b.dataset.t===detailState.tab)b.classList.add("active");b.onclick=()=>{detailState.tab=b.dataset.t;drawModal();};});
+  const body=modal.querySelector("#mBody");
+  if(detailState.tab==="perf")renderPerfTab(body,g,prev);
+  else if(detailState.tab==="video")renderVideoTab(body,g);
+  else renderAudTab(body,g);
+}
+function metricCell(key,m,prev){
+  const di=prev?deltaInfo(key,m[key],prev[key]):null;const st=statusFor(key,m[key]);
+  return `<div class="mcell"><div class="k">${METRICS[key].label}</div><div class="v" style="${st?`color:${statusColor(st)}`:""}">${fmtMetric(m,key)}</div>${di?`<div class="delta ${di.cls}" style="font-size:10.5px">${di.arrow} ${Math.abs(di.pct).toFixed(0)}%</div>`:""}</div>`;
+}
+function renderPerfTab(body,g,prev){
+  const m=g.m,pm=prev?prev.m:null;
+  const sec=(t,keys)=>`<div class="grouphdr">${t}</div><div class="mgrid">${keys.map(k=>metricCell(k,m,pm)).join("")}</div>`;
+  body.innerHTML=
+    sec("Performance",["spend","pv","roas","cpa","aov","impressions","reach","frequency","cpm"])+
+    sec("Clicks & engagement",["clicks","linkClicks","ctr","cpc","hookRate","holdRate"])+
+    sec("Conversion funnel",["linkClicks","purchases","cvr"])+
+    `<div class="grouphdr">Ads in this group</div><div class="subads" id="subads"></div>`;
+  const sub=body.querySelector("#subads");
+  g.items.slice().sort((a,b)=>b.m.spend-a.m.spend).forEach(a=>{
+    const r=el(`<div class="row"></div>`);
+    r.innerHTML=`<span class="nm">${a.id}</span><span class="pill n">${fmt(a.m.spend,"money0")}</span><span class="pill ${statusFor("cpa",a.m.cpa)||"n"}">CPA ${fmt(a.m.cpa,"money")}</span><span class="pill ${statusFor("roas",a.m.roas)||"n"}">${a.m.roas.toFixed(2)}x</span><a href="${FB_ADS_URL(a.id)}" target="_blank" rel="noopener">Open in FB ↗</a>`;
+    sub.appendChild(r);
+  });
+}
+function renderVideoTab(body,g){
+  const s=g.sums;
+  body.innerHTML=`
+    <div class="grouphdr">Video retention — % of impressions reaching each point</div>
+    <div class="card chart-box" style="box-shadow:none"><div class="chartwrap" style="height:220px"><canvas id="retChart"></canvas></div></div>
+    <div class="mgrid" style="margin-top:10px">
+      ${metricCell("hookRate",g.m,null)}${metricCell("holdRate",g.m,null)}
+      <div class="mcell"><div class="k">25% views</div><div class="v">${fmt(s.p25,"int")}</div></div>
+      <div class="mcell"><div class="k">ThruPlays</div><div class="v">${fmt(s.thru,"int")}</div></div>
+      <div class="mcell"><div class="k">Completions (100%)</div><div class="v">${fmt(s.p100,"int")}</div></div>
+      <div class="mcell"><div class="k">Impressions</div><div class="v">${fmt(s.impr,"int")}</div></div>
+    </div>
+    <div class="grouphdr">Watch / download the creative on Facebook</div><div class="subads" id="vsub"></div>`;
+  const vsub=body.querySelector("#vsub");
+  g.items.slice().sort((a,b)=>b.m.spend-a.m.spend).forEach(a=>{
+    const r=el(`<div class="row"></div>`);
+    r.innerHTML=`<span class="nm">${a.id}</span><span class="muted">creative ${a.creative_id||"–"}</span><span style="flex:1"></span><a href="${FB_ADS_URL(a.id)}" target="_blank" rel="noopener">Open in Ads Manager ↗</a>`;
+    vsub.appendChild(r);
+  });
+  requestAnimationFrame(()=>{
+    const cv=document.getElementById("retChart");if(!cv)return;
+    const ch=new Chart(cv,{type:"line",data:{labels:RET_LABELS,datasets:[{data:retentionPoints(s),borderColor:"#7c6cf0",backgroundColor:"rgba(124,108,240,.12)",borderWidth:2,pointRadius:3,fill:true,tension:.25}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.parsed.y.toFixed(1)+"% of impressions"}}},scales:{y:{min:0,max:100,grid:{color:"#eef0f4"},ticks:{font:{size:10},callback:v=>v+"%"}},x:{grid:{display:false},ticks:{font:{size:10}}}}}});
+    State.charts.push(ch);
+  });
+}
+async function renderAudTab(body,g){
+  body.innerHTML=`<div class="muted" style="padding:8px">Loading audience breakdown…</div>`;
+  try{await ensureAdBreakdowns();}catch(e){body.innerHTML=`<div class="err">Couldn't load audience breakdown.</div>`;return;}
+  const ag={},pl={};
+  // Breakdowns are reported at campaign level (the connector doesn't expose per-ad dimension
+  // splits), so scope the audience view to the campaign(s) this creative runs in.
+  const campSet=new Set((g.items||[]).map(a=>a.campaign_id).filter(Boolean));
+  const inScope=r=>campSet.size?campSet.has(r.campaign_id):true;
+  State.adAudience.filter(inScope).forEach(r=>{const k=[r.age,r.gender].filter(Boolean).join(" · ")||"?";if(!ag[k])ag[k]=emptySums();ag[k]=addSums(ag[k],rowSums(r));});
+  State.adPlatform.filter(inScope).forEach(r=>{const k=r.publisher_platform||"?";if(!pl[k])pl[k]=emptySums();pl[k]=addSums(pl[k],rowSums(r));});
+  body.innerHTML=`
+    <div class="muted" style="font-size:11px;padding:2px 2px 8px">Audience splits are reported at the campaign level, for the campaign(s) this creative runs in.</div>
+    <div class="grouphdr">Spend by age</div>
+    <div class="card chart-box" style="box-shadow:none"><div class="chartwrap" style="height:230px"><canvas id="agChart"></canvas></div></div>
+    <div class="grouphdr">Spend by platform</div>
+    <div class="card chart-box" style="box-shadow:none"><div class="chartwrap" style="height:170px"><canvas id="plChart"></canvas></div></div>`;
+  requestAnimationFrame(()=>{
+    drawBkMini("agChart",Object.entries(ag).map(([k,s])=>({label:k,m:derive(s)})),"rgba(53,99,214,.6)");
+    drawBkMini("plChart",Object.entries(pl).map(([k,s])=>({label:k,m:derive(s)})),"rgba(26,157,99,.6)");
+  });
+}
+function drawBkMini(id,arr,color){
+  const cv=document.getElementById(id);if(!cv)return;
+  arr=arr.filter(b=>b.m.spend>0).sort((a,b)=>b.m.spend-a.m.spend);
+  const ch=new Chart(cv,{type:"bar",data:{labels:arr.map(a=>a.label),datasets:[{data:arr.map(a=>a.m.spend),backgroundColor:color,borderRadius:4}]},
+    options:{indexAxis:"y",responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>{const m=arr[c.dataIndex].m;return "Spend "+fmt(m.spend,"money0")+" · ROAS "+(m.roas?m.roas.toFixed(2):"–")+" · CPA "+(m.cpa?fmt(m.cpa,"money"):"–");}}}},scales:{x:{grid:{color:"#eef0f4"},ticks:{font:{size:10},callback:v=>"$"+v}},y:{grid:{display:false},ticks:{font:{size:10}}}}}});
+  State.charts.push(ch);
+}
+
+/* ============================ COMPARE ============================ */
+function updateCmpBar(){
+  const names=[...State.compare];
+  document.getElementById("cmpNames").textContent=names.join(", ");
+  document.getElementById("cmpbar").classList.toggle("show",names.length>0);
+}
+function openCompare(){
+  const names=[...State.compare];if(!names.length)return;
+  const groups=names.map(n=>State.groups.find(g=>g.name===n)).filter(Boolean);
+  const modal=document.getElementById("modal");
+  modal.innerHTML=`<div class="modal-head"><h3>Creative comparison</h3><span class="pill n">${groups.length} creatives</span>
+      <div style="margin-left:auto;display:flex;gap:8px;align-items:center"><select id="cmpMetric"></select><button class="x" id="mClose">×</button></div></div>
+    <div class="modal-body"><div class="card chart-box" style="box-shadow:none"><div class="chartwrap" style="height:300px"><canvas id="cmpChart"></canvas></div></div>
+      <div class="grouphdr">Video retention overlay (% of impressions)</div>
+      <div class="card chart-box" style="box-shadow:none"><div class="chartwrap" style="height:240px"><canvas id="cmpRet"></canvas></div></div>
+      <div id="cmpTable"></div></div>`;
+  modal.querySelector("#mClose").onclick=closeModal;
+  const sel=modal.querySelector("#cmpMetric");
+  ["cpa","roas","spend","pv","aov","ctr","cpc","cpm","frequency","hookRate","holdRate","purchases"].forEach(k=>{const o=document.createElement("option");o.value=k;o.textContent=METRICS[k].label;sel.appendChild(o);});
+  sel.value="cpa";sel.onchange=()=>drawCmp(groups,sel.value);
+  document.getElementById("overlay").classList.add("show");
+  requestAnimationFrame(()=>{drawCmp(groups,"cpa");drawCmpRet(groups);});
+}
+const CMP_COLORS=["#7c6cf0","#f0682a","#1a9d63","#3563d6","#d6452f","#c9870a","#0e9aa7","#b5179e"];
+function drawCmp(groups,key){
+  const cv=document.getElementById("cmpChart");if(!cv)return;if(cv._chart)cv._chart.destroy();
+  cv._chart=new Chart(cv,{type:"bar",data:{labels:groups.map(g=>g.name),datasets:[{label:METRICS[key].label,data:groups.map(g=>g.m[key]||0),backgroundColor:groups.map((_,i)=>CMP_COLORS[i%CMP_COLORS.length])}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>METRICS[key].label+": "+fmt(c.parsed.y,METRICS[key].fmt)}}},scales:{y:{beginAtZero:true,grid:{color:"#eef0f4"},ticks:{font:{size:10},callback:v=>fmt(v,METRICS[key].fmt)}},x:{grid:{display:false},ticks:{font:{size:10}}}}}});
+  State.charts.push(cv._chart);
+  const keys=["spend","cpa","roas","pv","aov","ctr","frequency"];
+  let html=`<table class="bk-table"><thead><tr><th>Creative</th>${keys.map(k=>`<th>${METRICS[k].label}</th>`).join("")}</tr></thead><tbody>`;
+  groups.forEach(g=>{html+=`<tr><td>${g.name}</td>${keys.map(k=>`<td>${fmtMetric(g.m,k)}</td>`).join("")}</tr>`;});
+  html+=`</tbody></table>`;document.getElementById("cmpTable").innerHTML=html;
+}
+function drawCmpRet(groups){
+  const cv=document.getElementById("cmpRet");if(!cv)return;
+  const ds=groups.map((g,i)=>({label:g.name,data:retentionPoints(g.sums),borderColor:CMP_COLORS[i%CMP_COLORS.length],borderWidth:2,pointRadius:0,tension:.25,fill:false}));
+  const ch=new Chart(cv,{type:"line",data:{labels:RET_LABELS,datasets:ds},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,labels:{font:{size:10},boxWidth:10}},tooltip:{callbacks:{label:c=>c.dataset.label+": "+c.parsed.y.toFixed(1)+"%"}}},scales:{y:{min:0,max:100,grid:{color:"#eef0f4"},ticks:{font:{size:10},callback:v=>v+"%"}},x:{grid:{display:false},ticks:{font:{size:10}}}}}});
+  State.charts.push(ch);
+}
+
+/* ============================ SETTINGS ============================ */
+function openSettings(){
+  const modal=document.getElementById("modal");
+  const tRows=[["cpa","Target CPA ($, lower is better)"],["roas","Target ROAS (x, higher is better)"],["ctr","Target CTR (%, higher)"],["cpc","Target CPC ($, lower)"],["cpm","Target CPM ($, lower)"],["frequency","Max Frequency (lower)"]];
+  modal.innerHTML=`<div class="modal-head"><h3>Settings</h3><button class="x" id="mClose">×</button></div>
+    <div class="modal-body">
+      <div class="grouphdr">Default date range on open</div>
+      <div class="settings-row"><label>When the dashboard opens, start on this range</label>
+        <select id="defRangeSel" class="dateinput" style="width:auto">${Object.keys(RANGE_LABELS).map(r=>`<option value="${r}" ${S.defaultRange===r?"selected":""}>${RANGE_LABELS[r]}</option>`).join("")}</select></div>
+      <div class="grouphdr">Targets — drive the green / amber / red coloring &amp; daily-trend target line</div>
+      ${tRows.map(([k,l])=>`<div class="settings-row"><label>${l}</label><input type="number" step="0.01" data-tgt="${k}" value="${S.targets[k]}"></div>`).join("")}
+      <div class="grouphdr">Metrics shown on ad cards</div>
+      <div class="checks" id="cardChecks">${Object.keys(METRICS).map(k=>`<label><input type="checkbox" data-card="${k}" ${S.cardMetrics.includes(k)?"checked":""}> ${METRICS[k].label}</label>`).join("")}</div>
+      <div class="grouphdr">Key-metric tiles</div>
+      <div class="checks" id="tileChecks">${Object.keys(METRICS).map(k=>`<label><input type="checkbox" data-tile="${k}" ${S.keyTiles.includes(k)?"checked":""}> ${METRICS[k].label}</label>`).join("")}</div>
+      <div style="display:flex;gap:8px;margin-top:16px"><button class="btn primary" id="saveSettings">Save &amp; apply</button><button class="btn" id="resetSettings">Reset defaults</button></div>
+    </div>`;
+  modal.querySelector("#mClose").onclick=closeModal;
+  modal.querySelector("#saveSettings").onclick=()=>{
+    modal.querySelectorAll("[data-tgt]").forEach(i=>{const v=parseFloat(i.value);if(!isNaN(v))S.targets[i.dataset.tgt]=v;});
+    const dr=modal.querySelector("#defRangeSel");if(dr)S.defaultRange=dr.value;
+    S.cardMetrics=[...modal.querySelectorAll("[data-card]:checked")].map(i=>i.dataset.card);
+    const checkedTiles=[...modal.querySelectorAll("[data-tile]:checked")].map(i=>i.dataset.tile);
+    const ordered=S.keyTiles.filter(k=>checkedTiles.includes(k));
+    checkedTiles.forEach(k=>{if(!ordered.includes(k))ordered.push(k);});
+    if(!S.cardMetrics.length)S.cardMetrics=DEFAULTS.cardMetrics.slice();
+    S.keyTiles=ordered.length?ordered:DEFAULTS.keyTiles.slice();
+    saveSettings();closeModal();render();
+  };
+  modal.querySelector("#resetSettings").onclick=()=>{S=JSON.parse(JSON.stringify(DEFAULTS));saveSettings();closeModal();render();};
+  document.getElementById("overlay").classList.add("show");
+}
+
+/* ============================ INIT ============================ */
+function showError(msg){document.getElementById("app").innerHTML=`<div class="err"><strong>Couldn't load data.</strong> ${msg}<br><span class="muted">Use the Reload button in the view header to retry.</span></div>`;}
+async function boot(){
+  try{
+    document.getElementById("app").innerHTML=`<div class="loading"><div class="spinner"></div>Loading your latest ad data…</div>`;
+    await loadSnapshot();
+    updateFreshness();
+    await loadAll();render();
+  }catch(e){showError(e.message||String(e));}
+}
+/* "Updated Xm ago" badge, from the snapshot's generated_at timestamp */
+function updateFreshness(){
+  const b=document.getElementById("updBadge");if(!b)return;
+  const ts=SNAP&&SNAP.metadata&&SNAP.metadata.generated_at;
+  const t=ts?new Date(ts):null;
+  if(!t||isNaN(t)){b.textContent="—";b.classList.add("old");return;}
+  const mins=Math.max(0,Math.round((Date.now()-t.getTime())/60000));
+  b.textContent = mins<1?"Updated just now" : mins<60?("Updated "+mins+"m ago") : mins<1440?("Updated "+Math.round(mins/60)+"h ago") : ("Updated "+Math.round(mins/1440)+"d ago");
+  b.classList.toggle("stale",mins>=360&&mins<1440);
+  b.classList.toggle("old",mins>=1440);
+  b.title="Data last refreshed "+t.toLocaleString();
+}
+document.getElementById("acctName").textContent=ACCT_NAME;
+document.getElementById("campSel").onchange=e=>{State.campaign=e.target.value;State.compare.clear();updateCmpBar();applyScope();render();};
+document.getElementById("rangeSel").onchange=e=>{
+  State.range=e.target.value; S.defaultRange=State.range; saveSettings(); boot();
+};
+document.getElementById("settingsBtn").onclick=openSettings;
+document.getElementById("cmpToggle").textContent="Δ vs prev: "+(S.compareOn?"on":"off");
+document.getElementById("cmpToggle").onclick=e=>{S.compareOn=!S.compareOn;saveSettings();e.target.textContent="Δ vs prev: "+(S.compareOn?"on":"off");boot();};
+document.getElementById("cmpOpen").onclick=openCompare;
+document.getElementById("cmpClear").onclick=()=>{State.compare.clear();updateCmpBar();document.querySelectorAll(".cmp-check input").forEach(c=>c.checked=false);};
+document.getElementById("overlay").onclick=e=>{if(e.target.id==="overlay")closeModal();};
+State.range=(S.defaultRange&&S.defaultRange!=="custom"&&RANGE_LABELS[S.defaultRange])?S.defaultRange:"last_14d";
+document.getElementById("rangeSel").value=State.range;
+/* Service worker — offline app shell + installable PWA */
+if("serviceWorker" in navigator){window.addEventListener("load",()=>{navigator.serviceWorker.register("sw.js").catch(()=>{});});}
+/* Keep the "Updated Xm ago" badge current */
+setInterval(updateFreshness,60000);
+boot();
+</script>
+</body>
+</html>
