@@ -79,3 +79,12 @@ node _data/build_all.mjs
 ```
 This pre-aggregates the breakdowns and writes `data.json` at the repo root, stamping
 `metadata.generated_at` with the current time. Print its output to confirm row counts.
+
+## Publish (scheduled refresh only)
+After `data.json` is rebuilt, commit and push it so the live app updates:
+```
+git add data.json && git commit -m "Refresh snapshot" && git push
+```
+The PWA's service worker is network-first for `data.json`, so phones pick up the new
+numbers the next time the app is opened online. (The intermediate `_data/*/raw/` files
+are git-ignored and do not need to be committed.)
