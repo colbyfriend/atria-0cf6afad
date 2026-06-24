@@ -1,0 +1,42 @@
+name: Sync refreshed data to main
+
+# When a Claude cloud session/routine refreshes the dashboard, it pushes its work
+# to a `claude/**` branch. This workflow grabs ONLY that branch's data.json and
+# commits it to main, so the live site updates with no manual merge. It never
+# touches any file other than data.json, so it can't merge unrelated changes.
+
+on:
+  push:
+    branches:
+      - 'claude/**'
+
+permissions:
+  contents: write
+
+jobs:
+  sync-data:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Take data.json from the pushed refresh branch
+        run: |
+          set -e
+          BRANCH="${GITHUB_REF#refs/heads/}"
+          echo "Refresh branch: $BRANCH"
+          git fetch origin "$BRANCH"
+          # Pull ONLY data.json from the refresh branch onto main
+          git checkout "origin/$BRANCH" -- data.json
+          if git diff --cached --quiet; then
+            echo "data.json is unchanged — nothing to sync."
+            exit 0
+          fi
+          git config user.name "atria-refresh-bot"
+          git config user.email "atria-refresh-bot@users.noreply.github.com"
+          git commit -m "Sync refreshed data.json from $BRANCH"
+          git push origin HEAD:main
+          echo "Synced refreshed data.json to main."
