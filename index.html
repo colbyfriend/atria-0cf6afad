@@ -1029,6 +1029,18 @@ if("serviceWorker" in navigator){window.addEventListener("load",()=>{navigator.s
 /* Keep the "Updated Xm ago" badge current */
 setInterval(updateFreshness,60000);
 boot();
+/* Re-pull fresh data whenever the app is reopened or refocused.
+   The installed PWA otherwise keeps the snapshot it fetched on first load
+   and shows stale numbers while the backend keeps refreshing every 4h. */
+let _lastRefetch=Date.now();
+function refetchIfStale(){
+  if(Date.now()-_lastRefetch<30000) return;   // debounce rapid focus events
+  _lastRefetch=Date.now();
+  SNAP=null;          // force loadSnapshot() to hit the network again
+  boot();             // re-fetches data.json (SW is network-first) + re-renders
+}
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")refetchIfStale();});
+window.addEventListener("focus",refetchIfStale);
 </script>
 </body>
 </html>
