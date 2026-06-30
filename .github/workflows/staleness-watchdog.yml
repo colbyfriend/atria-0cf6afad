@@ -1,0 +1,57 @@
+name: Data staleness watchdog
+
+# Independent safety net. The refresh routine can fail to deliver (fire but push
+# nothing) or not run at all. This job runs on its OWN schedule and FAILS if the
+# published data.json is older than the threshold, which makes GitHub email the
+# repository owner. So the dashboard can never go silently stale again.
+#
+# This watchdog only ALERTS; it does not fetch data. When it fails, re-run the
+# "Atria refresh (cloud - final)" routine (claude.ai/code routines) or trigger it
+# from a Claude session with: RemoteTrigger action:run trig_01JkUKFfjhKzdTQTvSw6opru
+
+on:
+  schedule:
+    - cron: "37 */2 * * *"   # every 2h, offset from the :07 refresh
+  workflow_dispatch:
+    inputs:
+      max_age_hours:
+        description: "Override staleness threshold in hours (default 6)"
+        required: false
+        default: "6"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staleness-watchdog
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Fail if data.json is stale
+        env:
+          MAX_AGE_HOURS: ${{ github.event.inputs.max_age_hours || '6' }}
+        run: |
+          node -e '
+            const fs = require("fs");
+            const max = Number(process.env.MAX_AGE_HOURS || "6");
+            let d;
+            try { d = JSON.parse(fs.readFileSync("./data.json", "utf8")); }
+            catch (e) { console.error("WATCHDOG FAIL: cannot read/parse data.json —", e.message); process.exit(1); }
+            const ts = d && d.metadata && d.metadata.generated_at;
+            const t = ts ? Date.parse(ts) : NaN;
+            if (Number.isNaN(t)) { console.error("WATCHDOG FAIL: data.json has no valid metadata.generated_at"); process.exit(1); }
+            const ageH = (Date.now() - t) / 3.6e6;
+            console.log("data.json generated_at:", ts);
+            console.log("age:", ageH.toFixed(2), "h (threshold", max, "h)");
+            if (ageH >= max) {
+              console.error("WATCHDOG FAIL: data.json is " + ageH.toFixed(1) + "h old (>= " + max + "h). The refresh pipeline is not delivering — re-run the Atria refresh routine.");
+              process.exit(1);
+            }
+            console.log("OK: data is fresh.");
+          '

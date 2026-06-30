@@ -224,6 +224,7 @@ select,.btn{font-family:inherit;font-size:12px;border:1px solid var(--line);back
         <option value="last_month">Last month</option>
         <option value="maximum">Maximum</option>
       </select>
+      <button class="btn" id="refreshBtn" title="Refresh data now">↻ Refresh</button>
       <button class="btn" id="cmpToggle" title="Compare to previous period">Δ vs prev: on</button>
       <button class="btn" id="settingsBtn">⚙ Settings</button>
     </div>
@@ -1031,16 +1032,27 @@ setInterval(updateFreshness,60000);
 boot();
 /* Re-pull fresh data whenever the app is reopened or refocused.
    The installed PWA otherwise keeps the snapshot it fetched on first load
-   and shows stale numbers while the backend keeps refreshing every 4h. */
+   and shows stale numbers while the backend keeps refreshing. */
 let _lastRefetch=Date.now();
-function refetchIfStale(){
-  if(Date.now()-_lastRefetch<30000) return;   // debounce rapid focus events
+function forceRefresh(){   // manual / no debounce — always hits the network
   _lastRefetch=Date.now();
-  SNAP=null;          // force loadSnapshot() to hit the network again
-  boot();             // re-fetches data.json (SW is network-first) + re-renders
+  SNAP=null;              // force loadSnapshot() to hit the network again
+  boot();                 // re-fetches data.json (SW is network-first) + re-renders
+}
+function refetchIfStale(){
+  if(Date.now()-_lastRefetch<30000) return;   // debounce rapid focus/interval events
+  forceRefresh();
 }
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")refetchIfStale();});
 window.addEventListener("focus",refetchIfStale);
+/* While the app is open in the foreground, re-pull every 5 min. Belt-and-suspenders
+   for iOS PWAs that don't reliably fire visibilitychange/focus on resume. */
+setInterval(()=>{if(document.visibilityState==="visible")refetchIfStale();},300000);
+/* Manual refresh: the header button and the "Updated" badge both force a fresh pull. */
+const _refBtn=document.getElementById("refreshBtn");
+if(_refBtn)_refBtn.onclick=forceRefresh;
+const _updBadge=document.getElementById("updBadge");
+if(_updBadge){_updBadge.style.cursor="pointer";_updBadge.title="Tap to refresh now";_updBadge.onclick=forceRefresh;}
 </script>
 </body>
 </html>
